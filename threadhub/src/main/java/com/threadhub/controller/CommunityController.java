@@ -28,6 +28,19 @@ public class CommunityController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
+    @PutMapping("/{id}")
+    public ResponseEntity<CommunityResponse> updateCommunity(@PathVariable Long id,
+                                                            @Valid @RequestBody CommunityUpdateRequest request) {
+        CommunityResponse response = communityService.updateCommunity(id, request);
+        return ResponseEntity.ok(response);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> deleteCommunity(@PathVariable Long id) {
+        communityService.deleteCommunity(id);
+        return ResponseEntity.noContent().build();
+    }
+
     @GetMapping
     public ResponseEntity<List<CommunityResponse>> getAllCommunities() {
         List<CommunityResponse> communities = communityService.getAllCommunities();

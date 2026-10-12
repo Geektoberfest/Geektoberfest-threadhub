@@ -16,10 +16,12 @@ import com.threadhub.service.CommunityService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 import org.springframework.test.context.TestPropertySource;
@@ -33,7 +35,12 @@ import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -221,6 +228,160 @@ class CommunityControllerTest {
                         .header("Authorization", "Bearer " + validJwtToken))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409));
+    }
+
+    @Test
+    @DisplayName("PUT /api/communities/{id} - Should update the community for its owner (200 OK)")
+    void shouldAllowOwnerToUpdateCommunity() throws Exception {
+        CommunityResponse updatedResponse = CommunityResponse.builder()
+                .id(10L)
+                .name("spring")
+                .description("Updated description")
+                .owner(sampleCommunityResponse.getOwner())
+                .memberCount(1L)
+                .createdAt(sampleCommunityResponse.getCreatedAt())
+                .updatedAt(LocalDateTime.now())
+                .build();
+        when(communityService.updateCommunity(eq(10L), any(CommunityUpdateRequest.class))).thenReturn(updatedResponse);
+
+        String jsonRequest = """
+                {
+                    "description": "Updated description"
+                }
+                """;
+
+        mockMvc.perform(put("/api/communities/10")
+                        .header("Authorization", "Bearer " + validJwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonRequest))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(10))
+                .andExpect(jsonPath("$.name").value("spring"))
+                .andExpect(jsonPath("$.description").value("Updated description"))
+                .andExpect(jsonPath("$.owner.username").value("testuser"))
+                .andExpect(jsonPath("$.memberCount").value(1))
+                .andExpect(jsonPath("$.updatedAt").exists());
+    }
+
+    @Test
+    @DisplayName("PUT /api/communities/{id} - Should ignore a name supplied in the request body")
+    void shouldIgnoreNameInUpdateRequest() throws Exception {
+        when(communityService.updateCommunity(eq(10L), any(CommunityUpdateRequest.class))).thenReturn(sampleCommunityResponse);
+
+        String jsonRequest = """
+                {
+                    "name": "hijacked-name",
+                    "description": "Renamed attempt"
+                }
+                """;
+
+        mockMvc.perform(put("/api/communities/10")
+                        .header("Authorization", "Bearer " + validJwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(jsonRequest))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("spring"))
+                .andExpect(jsonPath("$.description").value("Spring boot discussion"));
+
+        ArgumentCaptor<CommunityUpdateRequest> requestCaptor = ArgumentCaptor.forClass(CommunityUpdateRequest.class);
+        verify(communityService).updateCommunity(eq(10L), requestCaptor.capture());
+        assertThat(requestCaptor.getValue().getDescription()).isEqualTo("Renamed attempt");
+    }
+
+    @Test
+    @DisplayName("PUT /api/communities/{id} - Should reject unauthenticated user with 401 Unauthorized")
+    void shouldRejectUnauthenticatedCommunityUpdate() throws Exception {
+        mockMvc.perform(put("/api/communities/10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"description\":\"anything\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("PUT /api/communities/{id} - Should return 403 Forbidden for a non-owner")
+    void shouldReturnForbiddenWhenNonOwnerUpdates() throws Exception {
+        when(communityService.updateCommunity(eq(10L), any(CommunityUpdateRequest.class)))
+                .thenThrow(new AccessDeniedException("Only the community owner can update this community"));
+
+        mockMvc.perform(put("/api/communities/10")
+                        .header("Authorization", "Bearer " + validJwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"description\":\"anything\"}"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.message").value("Only the community owner can update this community"));
+    }
+
+    @Test
+    @DisplayName("PUT /api/communities/{id} - Should return 404 Not Found when the community does not exist")
+    void shouldReturnNotFoundWhenUpdatingMissingCommunity() throws Exception {
+        when(communityService.updateCommunity(eq(99L), any(CommunityUpdateRequest.class)))
+                .thenThrow(new CommunityNotFoundException("Community not found with id: 99"));
+
+        mockMvc.perform(put("/api/communities/99")
+                        .header("Authorization", "Bearer " + validJwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"description\":\"anything\"}"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    @DisplayName("PUT /api/communities/{id} - Should return 400 Bad Request when the description is too long")
+    void shouldReturnBadRequestWhenUpdatePayloadIsInvalid() throws Exception {
+        String tooLongDescription = "x".repeat(501);
+
+        mockMvc.perform(put("/api/communities/10")
+                        .header("Authorization", "Bearer " + validJwtToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"description\":\"" + tooLongDescription + "\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("Validation failed"))
+                .andExpect(jsonPath("$.details[0]").value("Description must not exceed 500 characters"));
+    }
+
+    @Test
+    @DisplayName("DELETE /api/communities/{id} - Should delete the community for its owner (204 No Content)")
+    void shouldAllowOwnerToDeleteCommunity() throws Exception {
+        mockMvc.perform(delete("/api/communities/10")
+                        .header("Authorization", "Bearer " + validJwtToken))
+                .andExpect(status().isNoContent())
+                .andExpect(content().string(""));
+
+        verify(communityService).deleteCommunity(10L);
+    }
+
+    @Test
+    @DisplayName("DELETE /api/communities/{id} - Should reject unauthenticated user with 401 Unauthorized")
+    void shouldRejectUnauthenticatedCommunityDeletion() throws Exception {
+        mockMvc.perform(delete("/api/communities/10"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("DELETE /api/communities/{id} - Should return 403 Forbidden for a non-owner")
+    void shouldReturnForbiddenWhenNonOwnerDeletes() throws Exception {
+        doThrow(new AccessDeniedException("Only the community owner can delete this community"))
+                .when(communityService).deleteCommunity(anyLong());
+
+        mockMvc.perform(delete("/api/communities/10")
+                        .header("Authorization", "Bearer " + validJwtToken))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403))
+                .andExpect(jsonPath("$.message").value("Only the community owner can delete this community"));
+    }
+
+    @Test
+    @DisplayName("DELETE /api/communities/{id} - Should return 404 Not Found when the community does not exist")
+    void shouldReturnNotFoundWhenDeletingMissingCommunity() throws Exception {
+        doThrow(new CommunityNotFoundException("Community not found with id: 99"))
+                .when(communityService).deleteCommunity(99L);
+
+        mockMvc.perform(delete("/api/communities/99")
+                        .header("Authorization", "Bearer " + validJwtToken))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
     }
 
     @Test
