@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { ErrorMessage } from '../../components/common/ErrorMessage';
@@ -14,6 +15,7 @@ export function Register() {
   const [details, setDetails] = useState([]);
 
   const { register, login } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -22,23 +24,36 @@ export function Register() {
     setDetails([]);
 
     if (username.length < 3) {
-      setError('Username must be at least 3 characters');
+      const message = 'Username must be at least 3 characters';
+      setError(message);
+      toast.error(message);
       return;
     }
     if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+      const message = 'Password must be at least 6 characters';
+      setError(message);
+      toast.error(message);
       return;
     }
 
     setLoading(true);
+    let accountCreated = false;
 
     try {
       await register(username, email, password);
+      accountCreated = true;
+      toast.success('Account created successfully.');
       // Auto login after successful registration
       await login(email, password);
       navigate('/communities');
     } catch (err) {
-      setError(err.message || 'Registration failed');
+      // A failure of the automatic sign-in after a successful registration must not look like a
+      // failed registration, and it must not suggest that the user is logged in.
+      const message = accountCreated
+        ? 'Account created, but signing in failed. Please log in.'
+        : (err.message || 'Registration failed');
+      setError(message);
+      toast.error(message);
       if (err.data?.details) {
         setDetails(err.data.details);
       }

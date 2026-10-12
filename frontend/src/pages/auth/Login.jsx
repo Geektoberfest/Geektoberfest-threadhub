@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { Button } from '../../components/common/Button';
 import { Input } from '../../components/common/Input';
 import { ErrorMessage } from '../../components/common/ErrorMessage';
@@ -12,6 +13,7 @@ export function Login() {
   const [error, setError] = useState(null);
 
   const { login } = useAuth();
+  const toast = useToast();
   const navigate = useNavigate();
 
   const handleSubmit = async (e) => {
@@ -19,7 +21,9 @@ export function Login() {
     setError(null);
 
     if (!email || !password) {
-      setError('Please fill in all fields');
+      const message = 'Please fill in all fields';
+      setError(message);
+      toast.error(message);
       return;
     }
 
@@ -27,9 +31,12 @@ export function Login() {
 
     try {
       await login(email, password);
+      toast.success('Logged in successfully.');
       navigate('/communities');
     } catch (err) {
-      setError(err.message || 'Invalid email or password');
+      const message = err.message || 'Invalid email or password';
+      setError(message);
+      toast.error(message);
     } finally {
       setLoading(false);
     }

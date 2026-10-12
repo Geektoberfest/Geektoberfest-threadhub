@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { ToastProvider } from './context/ToastContext';
 import { AppLayout } from './components/layout/AppLayout';
 import { ProtectedRoute } from './components/auth/ProtectedRoute';
 import { Home } from './pages/Home';
@@ -11,26 +12,28 @@ import { CreateCommunity } from './pages/communities/CreateCommunity';
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route element={<AppLayout />}>
-            <Route path="/" element={<Home />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-            <Route path="/communities" element={<Communities />} />
-            <Route path="/communities/:id" element={<CommunityDetail />} />
-            
-            {/* Protected Routes */}
-            <Route element={<ProtectedRoute />}>
-              <Route path="/communities/create" element={<CreateCommunity />} />
-            </Route>
+    <ToastProvider>
+      <AuthProvider>
+        <BrowserRouter>
+          <Routes>
+            <Route element={<AppLayout />}>
+              <Route path="/" element={<Home />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
+              <Route path="/communities" element={<Communities />} />
+              <Route path="/communities/:id" element={<CommunityDetail />} />
 
-            {/* Fallback 404 */}
-            <Route path="*" element={<Home />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
-    </AuthProvider>
+              {/* Protected Routes */}
+              <Route element={<ProtectedRoute />}>
+                <Route path="/communities/create" element={<CreateCommunity />} />
+              </Route>
+
+              {/* Fallback 404 */}
+              <Route path="*" element={<Home />} />
+            </Route>
+          </Routes>
+        </BrowserRouter>
+      </AuthProvider>
+    </ToastProvider>
   );
 }

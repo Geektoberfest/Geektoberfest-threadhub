@@ -1,5 +1,24 @@
 @import "tailwindcss";
 
+/*
+ * Entrance animation for toast notifications. It is skipped for users who prefer reduced motion,
+ * by pairing the `animate-toast-in` utility with `motion-reduce:animate-none` on the toast.
+ */
+@theme {
+  --animate-toast-in: toast-in 200ms ease-out;
+
+  @keyframes toast-in {
+    from {
+      opacity: 0;
+      transform: translateY(-0.5rem) scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+}
+
 @layer base {
   body {
     @apply bg-slate-950 text-slate-100 min-h-screen font-sans antialiased selection:bg-orange-500/30 selection:text-orange-200;
