@@ -20,6 +20,8 @@ import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.security.web.SecurityFilterChain;
 
 import javax.crypto.SecretKey;
@@ -32,6 +34,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.List;
 @Configuration
 @EnableWebSecurity
+@EnableConfigurationProperties(RateLimitProperties.class)
 public class SecurityConfig {
 
     @Bean
@@ -88,6 +91,15 @@ public CorsConfigurationSource corsConfigurationSource() {
 
     return source;
 }
+    @Bean
+    public FilterRegistrationBean<RateLimitFilter> rateLimitFilterRegistration(RateLimitFilter rateLimitFilter) {
+        FilterRegistrationBean<RateLimitFilter> registration = new FilterRegistrationBean<>(rateLimitFilter);
+        registration.addUrlPatterns("/*");
+        registration.setOrder(Integer.MIN_VALUE);
+        registration.setName("rateLimitFilter");
+        return registration;
+    }
+
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtDecoder jwtDecoder) throws Exception {
         http

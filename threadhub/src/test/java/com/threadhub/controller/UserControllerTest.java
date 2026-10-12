@@ -3,6 +3,7 @@ package com.threadhub.controller;
 import com.nimbusds.jose.jwk.source.ImmutableSecret;
 import com.nimbusds.jose.jwk.source.JWKSource;
 import com.nimbusds.jose.proc.SecurityContext;
+import com.threadhub.config.RateLimitFilter;
 import com.threadhub.config.SecurityConfig;
 import com.threadhub.dto.UserCreateRequest;
 import com.threadhub.dto.UserResponse;
@@ -43,13 +44,16 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(UserController.class)
-@Import({SecurityConfig.class, GlobalExceptionHandler.class})
+@Import({SecurityConfig.class, GlobalExceptionHandler.class, RateLimitFilter.class})
 @TestPropertySource(properties = {
-        "jwt.secret=404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
+        "jwt.secret=404E635266556A586E3272357538782F413F44284B6250645367566B5970",
+        "rate-limit.login-requests-per-window=5",
+        "rate-limit.registration-requests-per-window=5",
+        "rate-limit.window-duration=PT1S"
 })
 class UserControllerTest {
 
-    private static final String TEST_SECRET = "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970";
+    private static final String TEST_SECRET = "404E635266556A586E3272357538782F413F44284B6250645367566B5970";
 
     @Autowired
     private MockMvc mockMvc;
@@ -97,22 +101,25 @@ class UserControllerTest {
         expiredJwtToken = jwtEncoder.encode(JwtEncoderParameters.from(jwsHeader, expiredClaims)).getTokenValue();
     }
 
+    private String registrationJson(String username, String email) {
+        return """
+                {
+                    "username": "%s",
+                    "email": "%s",
+                    "password": "password123"
+                }
+                """.formatted(username, email);
+    }
+
     @Test
     @DisplayName("POST /api/users - Should permit public registration without token and return 201 Created")
     void shouldCreateUserPublicly() throws Exception {
         when(userService.createUser(any(UserCreateRequest.class))).thenReturn(sampleResponse);
 
-        String jsonRequest = """
-                {
-                    "username": "jane_doe",
-                    "email": "jane@example.com",
-                    "password": "password123"
-                }
-                """;
-
         mockMvc.perform(post("/api/users")
+                        .header("X-Forwarded-For", "20.0.0.1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(jsonRequest))
+                        .content(registrationJson("jane_doe", "jane@example.com")))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.username").value("jane_doe"))
@@ -123,17 +130,16 @@ class UserControllerTest {
     @Test
     @DisplayName("POST /api/users - Should return 400 Bad Request when validation fails")
     void shouldReturnBadRequestWhenValidationFails() throws Exception {
-        String invalidJsonRequest = """
-                {
-                    "username": "ab",
-                    "email": "invalid-email",
-                    "password": ""
-                }
-                """;
-
         mockMvc.perform(post("/api/users")
+                        .header("X-Forwarded-For", "20.0.0.2")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(invalidJsonRequest))
+                        .content("""
+                                {
+                                    "username": "ab",
+                                    "email": "invalid-email",
+                                    "password": ""
+                                }
+                                """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message").value("Validation failed"))
@@ -143,11 +149,10 @@ class UserControllerTest {
     @Test
     @DisplayName("POST /api/users - Should return 400 Bad Request when JSON request body is malformed")
     void shouldReturnBadRequestWhenJsonIsMalformed() throws Exception {
-        String malformedJson = "{ \"username\": \"jane\", \"email\": }";
-
         mockMvc.perform(post("/api/users")
+                        .header("X-Forwarded-For", "20.0.0.3")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(malformedJson))
+                        .content("{ \"username\": \"jane\", \"email\": }"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.message").value("Malformed JSON request body"));
@@ -156,18 +161,13 @@ class UserControllerTest {
     @Test
     @DisplayName("POST /api/users - Should return 409 Conflict when username is duplicate")
     void shouldReturnConflictOnDuplicateUsername() throws Exception {
-        String jsonRequest = """
-                {
-                    "username": "jane_doe",
-                    "email": "jane@example.com",
-                    "password": "password123"
-                }
-                """;
+        String jsonRequest = registrationJson("jane_doe", "jane@example.com");
 
         when(userService.createUser(any(UserCreateRequest.class)))
                 .thenThrow(new DuplicateUsernameException("Username already taken: jane_doe"));
 
         mockMvc.perform(post("/api/users")
+                        .header("X-Forwarded-For", "20.0.0.4")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonRequest))
                 .andExpect(status().isConflict())
@@ -178,23 +178,100 @@ class UserControllerTest {
     @Test
     @DisplayName("POST /api/users - Should return 409 Conflict when email is duplicate")
     void shouldReturnConflictOnDuplicateEmail() throws Exception {
-        String jsonRequest = """
-                {
-                    "username": "jane_doe",
-                    "email": "jane@example.com",
-                    "password": "password123"
-                }
-                """;
+        String jsonRequest = registrationJson("jane_doe", "jane@example.com");
 
         when(userService.createUser(any(UserCreateRequest.class)))
                 .thenThrow(new DuplicateEmailException("Email already registered: jane@example.com"));
 
         mockMvc.perform(post("/api/users")
+                        .header("X-Forwarded-For", "20.0.0.5")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(jsonRequest))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.status").value(409))
                 .andExpect(jsonPath("$.message").value("Email already registered: jane@example.com"));
+    }
+
+    @Test
+    @DisplayName("POST /api/users - Should return 429 Too Many Requests when registration rate limit is exceeded")
+    void shouldReturn429WhenRegistrationRateLimitExceeded() throws Exception {
+        when(userService.createUser(any(UserCreateRequest.class))).thenReturn(sampleResponse);
+
+        String clientIp = "20.10.10.1";
+
+        // Exhaust the rate limit of 5 requests for this IP
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(post("/api/users")
+                            .header("X-Forwarded-For", clientIp)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(registrationJson("newuser" + i, "new" + i + "@example.com")))
+                    .andExpect(status().isCreated());
+        }
+
+        // The 6th request from the same IP should be rate limited
+        mockMvc.perform(post("/api/users")
+                        .header("X-Forwarded-For", clientIp)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registrationJson("newuser6", "new6@example.com")))
+                .andExpect(status().isTooManyRequests())
+                .andExpect(jsonPath("$.status").value(429))
+                .andExpect(jsonPath("$.error").value("Too Many Requests"))
+                .andExpect(jsonPath("$.message").value("Rate limit exceeded. Please try again later."));
+    }
+
+    @Test
+    @DisplayName("POST /api/users - Rate limit should be scoped to client IP")
+    void registrationRateLimitShouldBeScopedToClientIp() throws Exception {
+        when(userService.createUser(any(UserCreateRequest.class))).thenReturn(sampleResponse);
+
+        String exhaustedIp = "20.20.20.1";
+        String freshIp = "20.20.20.2";
+
+        // Exhaust rate limit for one IP
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(post("/api/users")
+                            .header("X-Forwarded-For", exhaustedIp)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(registrationJson("user" + i, "user" + i + "@example.com")))
+                    .andExpect(status().isCreated());
+        }
+
+        // Different IP should still be allowed
+        mockMvc.perform(post("/api/users")
+                        .header("X-Forwarded-For", freshIp)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registrationJson("freshuser", "fresh@example.com")))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    @DisplayName("POST /api/users - OPTIONS preflight should not be rate limited")
+    void optionsPreflightShouldNotBeRateLimited() throws Exception {
+        when(userService.createUser(any(UserCreateRequest.class))).thenReturn(sampleResponse);
+
+        // Send a bad POST from one IP
+        mockMvc.perform(post("/api/users")
+                        .header("X-Forwarded-For", "20.30.30.1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+
+        // OPTIONS requests from different IPs should not consume tokens
+        for (int i = 0; i < 5; i++) {
+            mockMvc.perform(post("/api/users")
+                            .header("X-Forwarded-For", "20.30.30." + (i + 2))
+                            .header("Origin", "http://localhost:5173")
+                            .header("Access-Control-Request-Method", "POST")
+                            .header("Access-Control-Request-Headers", "Content-Type"))
+                    .andExpect(status().isBadRequest());
+        }
+
+        // A real POST from a fresh, unused IP should still work
+        mockMvc.perform(post("/api/users")
+                        .header("X-Forwarded-For", "20.30.30.10")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(registrationJson("freshuser", "fresh@example.com")))
+                .andExpect(status().isCreated());
     }
 
     @Test
