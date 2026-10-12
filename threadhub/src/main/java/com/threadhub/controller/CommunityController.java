@@ -69,4 +69,13 @@ public class CommunityController {
         List<CommunityMemberResponse> members = communityMemberService.getCommunityMembers(communityId);
         return ResponseEntity.ok(members);
     }
+
+    @PutMapping("/{id}/members/{userId}/role")
+    public ResponseEntity<CommunityMemberResponse> updateMemberRole(
+            @PathVariable Long id,
+            @PathVariable Long userId,
+            @Valid @RequestBody RoleUpdateRequest request) {
+        CommunityMemberResponse response = communityMemberService.updateMemberRole(id, userId, request.getRole());
+        return ResponseEntity.ok(response);
+    }
 }

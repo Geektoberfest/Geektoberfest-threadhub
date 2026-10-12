@@ -102,4 +102,38 @@ public class CommunityMemberService {
                 .map(CommunityMemberResponse::fromEntity)
                 .collect(Collectors.toList());
     }
+
+    public CommunityMemberResponse updateMemberRole(Long communityId, Long userId, CommunityMemberRole newRole) {
+        Long callerId = SecurityUtils.getCurrentUserId()
+                .orElseThrow(() -> new InvalidCredentialsException("Authentication required"));
+
+        Community community = communityRepository.findById(communityId)
+                .orElseThrow(() -> new CommunityNotFoundException("Community not found with id: " + communityId));
+
+        CommunityMember targetMembership = communityMemberRepository.findByCommunityIdAndUserId(communityId, userId)
+                .orElseThrow(() -> new NotMemberException("User is not a member of this community"));
+
+        if (targetMembership.getRole() == CommunityMemberRole.OWNER) {
+            throw new ModeratorRoleChangeException("Cannot change the role of the community owner");
+        }
+
+        if (callerId.equals(userId)) {
+            throw new ModeratorRoleChangeException("You cannot change your own role");
+        }
+
+        CommunityMember callerMembership = communityMemberRepository.findByCommunityIdAndUserId(communityId, callerId)
+                .orElseThrow(() -> new NotMemberException("You are not a member of this community"));
+
+        if (callerMembership.getRole() != CommunityMemberRole.OWNER) {
+            throw new ModeratorRoleChangeException("Only the community owner can change member roles");
+        }
+
+        if (newRole == CommunityMemberRole.OWNER) {
+            throw new ModeratorRoleChangeException("Cannot assign the OWNER role through this endpoint");
+        }
+
+        targetMembership.setRole(newRole);
+        CommunityMember saved = communityMemberRepository.save(targetMembership);
+        return CommunityMemberResponse.fromEntity(saved);
+    }
 }
