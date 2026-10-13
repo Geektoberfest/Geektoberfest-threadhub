@@ -87,6 +87,13 @@
 			<artifactId>spring-boot-starter-webmvc-test</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- In-memory database for repository and context tests. Test scope only: PostgreSQL
+		     remains the runtime/production driver. Version managed by the Spring Boot parent. -->
+		<dependency>
+			<groupId>com.h2database</groupId>
+			<artifactId>h2</artifactId>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<build>
