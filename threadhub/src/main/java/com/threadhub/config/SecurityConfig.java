@@ -101,6 +101,7 @@ public CorsConfigurationSource corsConfigurationSource() {
                         .requestMatchers(HttpMethod.GET, "/api/communities/{id:\\d+}").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/communities/name/{name}").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/communities/{communityId:\\d+}/members").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/health").permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exceptions -> exceptions
