@@ -13,6 +13,7 @@ import org.springframework.security.oauth2.jwt.*;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -82,5 +83,31 @@ class JwtServiceTest {
 
         assertThatThrownBy(() -> jwtDecoder.decode(expiredToken))
                 .isInstanceOf(BadJwtException.class);
+    }
+
+    @Test
+    @DisplayName("Should embed a unique jti so an individual access token can be revoked")
+    void shouldEmbedUniqueTokenIdentifiers() {
+        String firstToken = jwtService.generateToken(sampleUser);
+        String secondToken = jwtService.generateToken(sampleUser);
+
+        String firstJti = jwtDecoder.decode(firstToken).getId();
+        String secondJti = jwtDecoder.decode(secondToken).getId();
+
+        assertThat(firstJti).isNotBlank();
+        assertThat(secondJti).isNotBlank();
+        assertThat(firstJti).isNotEqualTo(secondJti);
+    }
+
+    @Test
+    @DisplayName("Should honour the configured access-token lifetime")
+    void shouldHonourConfiguredAccessTokenLifetime() {
+        long fifteenMinutes = 900_000L;
+        JwtService shortLivedService = new JwtService(jwtEncoder, fifteenMinutes);
+
+        Jwt decoded = jwtDecoder.decode(shortLivedService.generateToken(sampleUser));
+
+        assertThat(Duration.between(decoded.getIssuedAt(), decoded.getExpiresAt()).toMillis())
+                .isEqualTo(fifteenMinutes);
     }
 }

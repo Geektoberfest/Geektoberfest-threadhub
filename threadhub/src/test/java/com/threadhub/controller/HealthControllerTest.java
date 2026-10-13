@@ -3,12 +3,14 @@ package com.threadhub.controller;
 import com.threadhub.config.SecurityConfig;
 import com.threadhub.dto.HealthResponse;
 import com.threadhub.exception.GlobalExceptionHandler;
+import com.threadhub.service.AccessTokenBlacklistService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.TestPropertySource;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
@@ -28,6 +30,10 @@ class HealthControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    // Required by SecurityConfig, which now composes revocation checks into the JWT decoder.
+    @MockitoBean
+    private AccessTokenBlacklistService accessTokenBlacklistService;
 
     @Test
     @DisplayName("GET /api/health - Should return HTTP 200 without authentication")

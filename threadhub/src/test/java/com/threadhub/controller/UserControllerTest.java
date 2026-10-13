@@ -12,6 +12,7 @@ import com.threadhub.exception.GlobalExceptionHandler;
 import com.threadhub.exception.UserNotFoundException;
 import com.threadhub.model.User;
 import com.threadhub.security.JwtService;
+import com.threadhub.service.AccessTokenBlacklistService;
 import com.threadhub.service.UserService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -53,6 +54,10 @@ class UserControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    // Required by SecurityConfig, which now composes revocation checks into the JWT decoder.
+    @MockitoBean
+    private AccessTokenBlacklistService accessTokenBlacklistService;
 
     @MockitoBean
     private UserService userService;

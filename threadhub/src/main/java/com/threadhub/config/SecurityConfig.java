@@ -18,8 +18,12 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
 import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtValidators;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
+import com.threadhub.security.AccessTokenRevocationValidator;
+import com.threadhub.service.AccessTokenBlacklistService;
 import org.springframework.security.web.SecurityFilterChain;
 
 import javax.crypto.SecretKey;
@@ -47,10 +51,16 @@ public class SecurityConfig {
     }
 
     @Bean
-    public JwtDecoder jwtDecoder(SecretKey secretKey) {
-        return NimbusJwtDecoder.withSecretKey(secretKey)
+    public JwtDecoder jwtDecoder(SecretKey secretKey, AccessTokenBlacklistService accessTokenBlacklistService) {
+        NimbusJwtDecoder decoder = NimbusJwtDecoder.withSecretKey(secretKey)
                 .macAlgorithm(MacAlgorithm.HS256)
                 .build();
+        // Keep the default signature/expiry checks and add revocation on top of them, so a
+        // blacklisted token fails authentication like any other invalid credential.
+        decoder.setJwtValidator(new DelegatingOAuth2TokenValidator<>(
+                JwtValidators.createDefault(),
+                new AccessTokenRevocationValidator(accessTokenBlacklistService)));
+        return decoder;
     }
 
     @Bean
@@ -97,6 +107,8 @@ public CorsConfigurationSource corsConfigurationSource() {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.POST, "/api/users").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
+                        // Refresh authenticates with the refresh token in the body, not a bearer token.
+                        .requestMatchers(HttpMethod.POST, "/api/auth/refresh").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/communities").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/communities/{id:\\d+}").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/communities/name/{name}").permitAll()

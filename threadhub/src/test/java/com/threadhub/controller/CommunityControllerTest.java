@@ -11,6 +11,7 @@ import com.threadhub.exception.GlobalExceptionHandler;
 import com.threadhub.model.CommunityMemberRole;
 import com.threadhub.model.User;
 import com.threadhub.security.JwtService;
+import com.threadhub.service.AccessTokenBlacklistService;
 import com.threadhub.service.CommunityMemberService;
 import com.threadhub.service.CommunityService;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,6 +56,10 @@ class CommunityControllerTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    // Required by SecurityConfig, which now composes revocation checks into the JWT decoder.
+    @MockitoBean
+    private AccessTokenBlacklistService accessTokenBlacklistService;
 
     @MockitoBean
     private CommunityService communityService;

@@ -10,23 +10,31 @@ import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
+import java.util.UUID;
 
+/**
+ * Mints short-lived access tokens. The lifetime is configured independently of the refresh-token
+ * lifetime, which {@code RefreshTokenService} owns.
+ */
 @Service
 public class JwtService {
 
     private final JwtEncoder jwtEncoder;
-    private final long jwtExpirationMs;
+    private final long accessTokenExpirationMs;
 
-    public JwtService(JwtEncoder jwtEncoder, @Value("${jwt.expiration:86400000}") long jwtExpirationMs) {
+    public JwtService(JwtEncoder jwtEncoder,
+                      @Value("${jwt.access-token-expiration:900000}") long accessTokenExpirationMs) {
         this.jwtEncoder = jwtEncoder;
-        this.jwtExpirationMs = jwtExpirationMs;
+        this.accessTokenExpirationMs = accessTokenExpirationMs;
     }
 
     public String generateToken(User user) {
         Instant now = Instant.now();
-        Instant expiresAt = now.plusMillis(jwtExpirationMs);
+        Instant expiresAt = now.plusMillis(accessTokenExpirationMs);
 
         JwtClaimsSet claims = JwtClaimsSet.builder()
+                // A stable identifier is required so logout can revoke this exact token.
+                .id(UUID.randomUUID().toString())
                 .subject(user.getId().toString())
                 .claim("username", user.getUsername())
                 .claim("email", user.getEmail())
@@ -40,6 +48,6 @@ public class JwtService {
     }
 
     public long getExpirationTimeMs() {
-        return jwtExpirationMs;
+        return accessTokenExpirationMs;
     }
 }

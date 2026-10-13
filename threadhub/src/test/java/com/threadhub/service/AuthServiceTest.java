@@ -15,6 +15,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.Optional;
 
@@ -33,6 +34,12 @@ class AuthServiceTest {
 
     @Mock
     private JwtService jwtService;
+
+    @Mock
+    private RefreshTokenService refreshTokenService;
+
+    @Mock
+    private AccessTokenBlacklistService accessTokenBlacklistService;
 
     @InjectMocks
     private AuthService authService;
@@ -63,18 +70,22 @@ class AuthServiceTest {
         when(userRepository.findByEmail(loginRequest.getEmail())).thenReturn(Optional.of(sampleUser));
         when(passwordEncoder.matches("rawPassword123", "encodedPassword123")).thenReturn(true);
         when(jwtService.generateToken(sampleUser)).thenReturn("mocked.jwt.token");
-        when(jwtService.getExpirationTimeMs()).thenReturn(86400000L);
+        when(jwtService.getExpirationTimeMs()).thenReturn(900_000L);
+        when(refreshTokenService.startSession(sampleUser)).thenReturn(
+                new RefreshTokenService.IssuedRefreshToken("mocked-refresh-token", Instant.now().plusSeconds(604_800)));
 
         AuthResponse response = authService.login(loginRequest);
 
         assertThat(response).isNotNull();
         assertThat(response.getAccessToken()).isEqualTo("mocked.jwt.token");
         assertThat(response.getTokenType()).isEqualTo("Bearer");
-        assertThat(response.getExpiresIn()).isEqualTo(86400000L);
+        assertThat(response.getExpiresIn()).isEqualTo(900_000L);
+        assertThat(response.getRefreshToken()).isEqualTo("mocked-refresh-token");
         assertThat(response.getUser()).isNotNull();
         assertThat(response.getUser().getEmail()).isEqualTo("user@example.com");
 
         verify(jwtService, times(1)).generateToken(sampleUser);
+        verify(refreshTokenService, times(1)).startSession(sampleUser);
     }
 
     @Test
