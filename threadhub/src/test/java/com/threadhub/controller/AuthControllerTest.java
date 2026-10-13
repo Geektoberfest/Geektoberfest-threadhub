@@ -32,7 +32,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "jwt.secret=404E635266556A586E3272357538782F413F44284B6250645367566B5970",
         "rate-limit.login-requests-per-window=5",
         "rate-limit.registration-requests-per-window=5",
-        "rate-limit.window-duration=PT1S"
+        "rate-limit.window-duration=PT1S",
+        // MockMvc requests arrive with remoteAddr 127.0.0.1, which stands in for the reverse proxy
+        // in front of the application. Trusting it here lets these tests drive client identity
+        // through X-Forwarded-For; production leaves the list empty, so forwarded headers are ignored.
+        "rate-limit.trusted-proxies=127.0.0.1"
 })
 class AuthControllerTest {
 
