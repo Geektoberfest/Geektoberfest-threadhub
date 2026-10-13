@@ -10,6 +10,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.core.env.Environment;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.test.context.TestPropertySource;
@@ -117,8 +118,63 @@ class FlywayMigrationTest {
 
         assertThat(checkConstraintDefinition("community_members"))
                 .contains("OWNER")
+                .contains("MODERATOR")
                 .contains("MEMBER")
                 .contains("role");
+    }
+
+    @Test
+    @DisplayName("The role CHECK constraint accepts OWNER, MODERATOR and MEMBER and rejects anything else")
+    void roleCheckConstraintAcceptsSupportedRolesAndRejectsOthers() {
+        assertThat(checkConstraintDefinition("community_members"))
+                .as("the CHECK constraint must allow every CommunityMemberRole value")
+                .contains("OWNER")
+                .contains("MODERATOR")
+                .contains("MEMBER");
+
+        String schema = newProbeSchema("flyway_roles");
+        flywayFor(schema, MIGRATION_LOCATION).migrate();
+
+        long communityId = seedCommunityOwnedBy(schema, "owner");
+        for (String role : List.of("OWNER", "MODERATOR", "MEMBER")) {
+            insertUser(schema, "member_" + role.toLowerCase());
+            insertMembership(schema, communityId, "member_" + role.toLowerCase(), role);
+        }
+
+        assertThat(jdbcTemplate.queryForObject(
+                "select count(*) from " + schema + ".community_members", Integer.class))
+                .as("all three supported roles must be storable")
+                .isEqualTo(3);
+
+        insertUser(schema, "intruder");
+        assertThatThrownBy(() -> insertMembership(schema, communityId, "intruder", "ADMIN"))
+                .as("an unknown role must still be rejected by the database")
+                .isInstanceOf(DataIntegrityViolationException.class)
+                .hasMessageContaining("community_members_role_check");
+    }
+
+    private void insertUser(String schema, String username) {
+        jdbcTemplate.update("""
+                insert into %s.users (created_at, updated_at, email, password, username)
+                values (now(), now(), ?, 'hash', ?)
+                """.formatted(schema), username + "@example.com", username);
+    }
+
+    private long seedCommunityOwnedBy(String schema, String ownerUsername) {
+        insertUser(schema, ownerUsername);
+        Long id = jdbcTemplate.queryForObject("""
+                insert into %s.communities (created_at, updated_at, name, description, owner_id)
+                select now(), now(), ?, null, id from %s.users where username = ?
+                returning id
+                """.formatted(schema, schema), Long.class, "roles_" + schema, ownerUsername);
+        return id;
+    }
+
+    private void insertMembership(String schema, long communityId, String username, String role) {
+        jdbcTemplate.update("""
+                insert into %s.community_members (joined_at, role, community_id, user_id)
+                select now(), ?, ?, u.id from %s.users u where u.username = ?
+                """.formatted(schema, schema), role, communityId, username);
     }
 
     @Test

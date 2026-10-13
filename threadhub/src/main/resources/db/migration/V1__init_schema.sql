@@ -45,7 +45,7 @@ CREATE TABLE community_members (
     user_id      bigint NOT NULL,
     CONSTRAINT community_members_pkey PRIMARY KEY (id),
     CONSTRAINT uk_user_community UNIQUE (user_id, community_id),
-    CONSTRAINT community_members_role_check CHECK (role IN ('OWNER', 'MEMBER')),
+    CONSTRAINT community_members_role_check CHECK (role IN ('OWNER', 'MODERATOR', 'MEMBER')),
     CONSTRAINT fk_community_members_community FOREIGN KEY (community_id) REFERENCES communities (id),
     CONSTRAINT fk_community_members_user FOREIGN KEY (user_id) REFERENCES users (id)
 );
