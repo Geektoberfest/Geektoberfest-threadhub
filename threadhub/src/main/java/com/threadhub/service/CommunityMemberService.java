@@ -113,12 +113,14 @@ public class CommunityMemberService {
         CommunityMember targetMembership = communityMemberRepository.findByCommunityIdAndUserId(communityId, userId)
                 .orElseThrow(() -> new NotMemberException("User is not a member of this community"));
 
-        if (targetMembership.getRole() == CommunityMemberRole.OWNER) {
-            throw new ModeratorRoleChangeException("Cannot change the role of the community owner");
-        }
-
+        // Self-change is checked first so an owner targeting themselves gets the self-change
+        // message rather than the owner-protection message.
         if (callerId.equals(userId)) {
             throw new ModeratorRoleChangeException("You cannot change your own role");
+        }
+
+        if (targetMembership.getRole() == CommunityMemberRole.OWNER) {
+            throw new ModeratorRoleChangeException("Cannot change the role of the community owner");
         }
 
         CommunityMember callerMembership = communityMemberRepository.findByCommunityIdAndUserId(communityId, callerId)

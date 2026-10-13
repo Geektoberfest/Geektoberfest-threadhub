@@ -52,11 +52,11 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @WebMvcTest(CommunityController.class)
 @Import({SecurityConfig.class, GlobalExceptionHandler.class})
 @TestPropertySource(properties = {
-        "jwt.secret=404E635266556A586E3272357538782F413F44284B6250645367566B5970"
+        "jwt.secret=404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970"
 })
 class CommunityControllerTest {
 
-    private static final String TEST_SECRET = "404E635266556A586E3272357538782F413F44284B6250645367566B5970";
+    private static final String TEST_SECRET = "404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970";
 
     @Autowired
     private MockMvc mockMvc;
@@ -143,6 +143,39 @@ class CommunityControllerTest {
                 .andExpect(jsonPath("$.id").value(10))
                 .andExpect(jsonPath("$.name").value("spring"))
                 .andExpect(jsonPath("$.owner.username").value("owner"));
+    }
+
+    @Test
+    @DisplayName("POST /api/communities - Should return 400 Bad Request when validation fails")
+    void shouldReturnBadRequestWhenValidationFails() throws Exception {
+        String invalidJsonRequest = """
+                {
+                    "name": "ab",
+                    "description": "Too short name"
+                }
+                """;
+
+        mockMvc.perform(post("/api/communities")
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(invalidJsonRequest))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("Validation failed"));
+    }
+
+    @Test
+    @DisplayName("POST /api/communities - Should return 400 Bad Request when JSON request body is malformed")
+    void shouldReturnBadRequestWhenJsonIsMalformed() throws Exception {
+        String malformedJson = "{ \"name\": \"spring\", \"description\": }";
+
+        mockMvc.perform(post("/api/communities")
+                        .header("Authorization", "Bearer " + ownerToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(malformedJson))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("Malformed JSON request body"));
     }
 
     @Test
@@ -422,6 +455,56 @@ class CommunityControllerTest {
                 .andExpect(jsonPath("$[0].userId").value(3))
                 .andExpect(jsonPath("$[0].username").value("member"))
                 .andExpect(jsonPath("$[0].role").value("MEMBER"));
+    }
+
+    @Test
+    @DisplayName("GET /api/communities/{id} - Should return 404 Not Found when community does not exist")
+    void shouldReturnNotFoundWhenCommunityMissing() throws Exception {
+        when(communityService.getCommunityById(99L)).thenThrow(new CommunityNotFoundException("Community not found with id: 99"));
+
+        mockMvc.perform(get("/api/communities/99"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404));
+    }
+
+    @Test
+    @DisplayName("GET /api/communities/{id} - Should return 400 Bad Request when path parameter type is invalid")
+    void shouldReturnBadRequestOnTypeMismatch() throws Exception {
+        mockMvc.perform(get("/api/communities/invalid-id")
+                        .header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.message").value("Invalid parameter type for: id"));
+    }
+
+    @Test
+    @DisplayName("POST /api/communities/{id}/join - Should reject unauthenticated user with 401 Unauthorized")
+    void shouldRejectUnauthenticatedJoin() throws Exception {
+        mockMvc.perform(post("/api/communities/10/join"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("POST /api/communities/{id}/join - Should allow authenticated user to join community")
+    void shouldAllowAuthenticatedUserToJoin() throws Exception {
+        when(communityMemberService.joinCommunity(10L)).thenReturn(sampleMemberResponse);
+
+        mockMvc.perform(post("/api/communities/10/join")
+                        .header("Authorization", "Bearer " + memberToken))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.userId").value(3))
+                .andExpect(jsonPath("$.role").value("MEMBER"));
+    }
+
+    @Test
+    @DisplayName("POST /api/communities/{id}/join - Should return 409 Conflict when user is already a member")
+    void shouldReturnConflictWhenAlreadyMember() throws Exception {
+        when(communityMemberService.joinCommunity(10L)).thenThrow(new AlreadyMemberException("User is already a member"));
+
+        mockMvc.perform(post("/api/communities/10/join")
+                        .header("Authorization", "Bearer " + memberToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
     }
 
     @Test
