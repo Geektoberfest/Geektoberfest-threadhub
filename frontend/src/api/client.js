@@ -1,9 +1,10 @@
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 const TOKEN_KEY = 'threadhub_token';
+const USER_KEY = 'threadhub_user';
 
 export async function apiClient(endpoint, { body, headers: customHeaders, ...customConfig } = {}) {
   const token = localStorage.getItem(TOKEN_KEY);
-  
+
   const headers = {
     'Content-Type': 'application/json',
     ...customHeaders,
@@ -39,6 +40,18 @@ export async function apiClient(endpoint, { body, headers: customHeaders, ...cus
       data = await response.json();
     } catch {
       data = null;
+    }
+  }
+
+  // Intercept 401 Unauthorized only for authenticated requests (exclude login attempts)
+  const isAuthEndpoint = endpoint.includes('/api/auth/login') || endpoint.includes('/auth/login');
+  if (response.status === 401 && !isAuthEndpoint && token) {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    window.dispatchEvent(new Event('threadhub:session-expired'));
+
+    if (!window.location.pathname.includes('/login')) {
+      window.location.href = '/login?expired=true';
     }
   }
 

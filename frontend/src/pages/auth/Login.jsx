@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { useToast } from '../../context/ToastContext';
 import { Button } from '../../components/common/Button';
@@ -11,6 +11,9 @@ export function Login() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+
+  const [searchParams] = useSearchParams();
+  const isExpired = searchParams.get('expired') === 'true';
 
   const { login } = useAuth();
   const toast = useToast();
@@ -49,6 +52,12 @@ export function Login() {
           <h1 className="text-2xl font-extrabold text-white tracking-tight">Log in to ThreadHub</h1>
           <p className="text-xs text-slate-400">Enter your credentials to access your account</p>
         </div>
+
+        {isExpired && !error && (
+          <div className="bg-amber-950/60 border border-amber-800 text-amber-200 text-xs px-4 py-3 rounded-lg flex items-center justify-between">
+            <span>Your session has expired. Please log in again to continue.</span>
+          </div>
+        )}
 
         {error && <ErrorMessage message={error} />}
 

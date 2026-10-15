@@ -25,6 +25,16 @@ export function AuthProvider({ children }) {
       }
     }
     setLoading(false);
+
+    const handleSessionExpired = () => {
+      setToken(null);
+      setUser(null);
+    };
+
+    window.addEventListener('threadhub:session-expired', handleSessionExpired);
+    return () => {
+      window.removeEventListener('threadhub:session-expired', handleSessionExpired);
+    };
   }, []);
 
   const login = async (email, password) => {
