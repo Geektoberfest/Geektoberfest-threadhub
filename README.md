@@ -171,6 +171,100 @@ When implementing reserved issues:
 
 ---
 
+## 7. Database Migrations (Flyway)
+
+ThreadHub's schema is owned by the versioned migrations in
+`threadhub/src/main/resources/db/migration/`. Hibernate runs with
+`spring.jpa.hibernate.ddl-auto=validate`, so it only verifies the migrated
+schema against the JPA entities — it never alters it.
+
+### Fresh database
+
+No special setup is required. Flyway applies `V1__init_schema.sql` on first
+startup and the application is ready:
+
+```bash
+cd threadhub
+DB_URL=jdbc:postgresql://localhost:5432/threadhub \
+DB_USERNAME=threadhub_user \
+DB_PASSWORD=threadhub_dev \
+./mvnw spring-boot:run
+```
+
+### First deployment against an existing database (baseline)
+
+A database created before Flyway already contains tables produced by the old
+`spring.jpa.hibernate.ddl-auto=update` setting, but has no
+`flyway_schema_history` table. Pointing Flyway at it without a baseline fails
+with *Found non-empty schema(s) without Flyway history table*, because V1
+would try to create tables that already exist.
+
+The first deployment against such a database therefore needs an explicit
+baseline. Choose **one** of the options below, then return to the normal flow.
+
+**Option A — application property (typical for the first deploy).** Set these
+for that deployment:
+
+```properties
+spring.flyway.baseline-on-migrate=true
+spring.flyway.baseline-version=1
+```
+
+`baseline-version` must match the migration the existing schema already
+corresponds to. ThreadHub currently ships a single migration, so the baseline
+is `1`: Flyway records a `BASELINE` row at version 1 and does not replay V1
+against tables that already exist. `LegacySchemaUpgradeTest` exercises exactly
+this configuration.
+
+**Option B — manual baseline.** Run the baseline yourself before the
+application starts, using the Flyway CLI matching the version on the
+classpath (12.4.0):
+
+```bash
+flyway baseline \
+  -url=jdbc:postgresql://localhost:5432/threadhub \
+  -user=threadhub_user \
+  -password="$DB_PASSWORD" \
+  -baselineVersion=1 \
+  -baselineDescription="Pre-Flyway schema adopted"
+```
+
+Both options exist only to adopt an existing schema once. After that first
+deployment the history table is present, so `baseline-on-migrate` no longer
+has any effect — but treat it as a deliberate one-time setting rather than
+standing configuration, because it will silently baseline any other non-empty
+schema the application is later pointed at. A manual baseline needs no
+follow-up, since it writes a single history row.
+
+### After baselining
+
+Subsequent deployments use the ordinary versioned migration flow: add
+`V2__*.sql`, `V3__*.sql`, … and Flyway applies only what is missing.
+
+### Baseline against a backup, and verify first
+
+1. Take a backup first (`pg_dump`).
+2. Verify the existing schema against the JPA mappings **before** baselining:
+   tables, columns, types, lengths, nullability and constraints.
+
+Baselining only writes a `flyway_schema_history` row that marks a starting
+point. **It does not validate, compare or repair the schema.** Any drift
+between the existing tables and the migrations stays in place and surfaces
+later as a Hibernate `validate` failure on startup.
+
+### Changing an already-applied migration
+
+Editing a migration file such as `V1__init_schema.sql` does **not** update
+databases that already recorded it — Flyway stores a checksum per applied
+migration and fails with *Migration checksum mismatch* instead. That is why V1
+could be corrected for the `MODERATOR` role before this branch merged: no
+deployed database had run it yet. Once a migration has shipped, schema changes
+go into a new versioned migration (`V2__*.sql`), or the database must be
+recreated / repaired after confirming the live schema really matches the
+edited file.
+
+---
+
 ## Technology Stack
 
 | Layer | Technology |
