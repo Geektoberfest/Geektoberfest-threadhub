@@ -39,6 +39,14 @@ public class UserService {
                 .build();
 
         User savedUser = userRepository.save(user);
+        eventPublisher.publishEvent(new AuditEvent(
+                this,
+                savedUser.getId(),
+                AuditAction.REGISTRATION,
+                "USER",
+                savedUser.getId(),
+                "New user registered"
+        ));
         return UserResponse.fromEntity(savedUser);
     }
 
