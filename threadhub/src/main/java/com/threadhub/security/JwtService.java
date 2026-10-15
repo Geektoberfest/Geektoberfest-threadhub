@@ -16,6 +16,8 @@ public class JwtService {
 
     private final JwtEncoder jwtEncoder;
     private final long jwtExpirationMs;
+    // 15 minutes in milliseconds = 15 * 60 * 1000 = 900,000 ms
+    private long jwtExpiration = 900000;
 
     public JwtService(JwtEncoder jwtEncoder, @Value("${jwt.expiration:86400000}") long jwtExpirationMs) {
         this.jwtEncoder = jwtEncoder;
