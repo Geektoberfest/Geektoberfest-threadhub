@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { communityApi } from '../../api/communityApi';
 import { useAuth } from '../../context/AuthContext';
+import { useToast } from '../../context/ToastContext';
 import { Button } from '../../components/common/Button';
 import { Loading } from '../../components/common/Loading';
 import { ErrorMessage } from '../../components/common/ErrorMessage';
@@ -9,6 +10,7 @@ import { ErrorMessage } from '../../components/common/ErrorMessage';
 export function CommunityDetail() {
   const { id } = useParams();
   const { user, isAuthenticated } = useAuth();
+  const toast = useToast();
 
   const [community, setCommunity] = useState(null);
   const [membership, setMembership] = useState({ isMember: false, role: null });
@@ -53,9 +55,12 @@ export function CommunityDetail() {
     setActionError(null);
     try {
       await communityApi.joinCommunity(id);
+      toast.success('You have joined the community.');
       await loadCommunityData();
     } catch (err) {
-      setActionError(err.message || 'Failed to join community.');
+      const message = err.message || 'Failed to join community.';
+      setActionError(message);
+      toast.error(message);
     } finally {
       setActionLoading(false);
     }
@@ -66,9 +71,12 @@ export function CommunityDetail() {
     setActionError(null);
     try {
       await communityApi.leaveCommunity(id);
+      toast.success('You have left the community.');
       await loadCommunityData();
     } catch (err) {
-      setActionError(err.message || 'Failed to leave community.');
+      const message = err.message || 'Failed to leave community.';
+      setActionError(message);
+      toast.error(message);
     } finally {
       setActionLoading(false);
     }
