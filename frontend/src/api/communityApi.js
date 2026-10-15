@@ -2,7 +2,10 @@ import { api } from './client';
 
 export const communityApi = {
   createCommunity: (data) => api.post('/api/communities', data),
-  getAllCommunities: () => api.get('/api/communities'),
+  getAllCommunities: (params = {}) => {
+    const query = new URLSearchParams(params).toString();
+    return api.get(`/api/communities${query ? `?${query}` : ''}`);
+  },
   getCommunityById: (id) => api.get(`/api/communities/${id}`),
   getCommunityByName: (name) => api.get(`/api/communities/name/${name}`),
   joinCommunity: (communityId) => api.post(`/api/communities/${communityId}/join`),

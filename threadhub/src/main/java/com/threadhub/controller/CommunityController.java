@@ -1,5 +1,9 @@
 package com.threadhub.controller;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import com.threadhub.dto.*;
 import com.threadhub.service.CommunityMemberService;
 import com.threadhub.service.CommunityService;
@@ -28,9 +32,12 @@ public class CommunityController {
         return new ResponseEntity<>(response, HttpStatus.CREATED);
     }
 
+    // New paginated & sorted endpoint:
     @GetMapping
-    public ResponseEntity<List<CommunityResponse>> getAllCommunities() {
-        List<CommunityResponse> communities = communityService.getAllCommunities();
+    public ResponseEntity<Page<CommunityResponse>> getAllCommunities(
+            @PageableDefault(page = 0, size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable
+    ) {
+        Page<CommunityResponse> communities = communityService.getAllCommunities(pageable);
         return ResponseEntity.ok(communities);
     }
 
