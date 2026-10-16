@@ -1,5 +1,7 @@
 package com.threadhub.service;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import com.threadhub.dto.CommunityCreateRequest;
 import com.threadhub.dto.CommunityResponse;
 import com.threadhub.dto.CommunityUpdateRequest;
@@ -156,13 +158,13 @@ public class CommunityService {
         return CommunityResponse.fromEntity(community, memberCount);
     }
 
+    // New paginated method:
     @Transactional(readOnly = true)
-    public List<CommunityResponse> getAllCommunities() {
-        return communityRepository.findAll().stream()
+    public Page<CommunityResponse> getAllCommunities(Pageable pageable) {
+        return communityRepository.findAll(pageable)
                 .map(community -> {
                     long memberCount = communityMemberRepository.countByCommunityId(community.getId());
                     return CommunityResponse.fromEntity(community, memberCount);
-                })
-                .collect(Collectors.toList());
+                });
     }
 }
