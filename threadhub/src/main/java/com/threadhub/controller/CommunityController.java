@@ -1,5 +1,6 @@
 package com.threadhub.controller;
 
+import com.threadhub.dto.RoleUpdateRequest;
 import com.threadhub.dto.*;
 import com.threadhub.service.CommunityMemberService;
 import com.threadhub.service.CommunityService;
@@ -30,7 +31,7 @@ public class CommunityController {
 
     @PutMapping("/{id}")
     public ResponseEntity<CommunityResponse> updateCommunity(@PathVariable Long id,
-                                                            @Valid @RequestBody CommunityUpdateRequest request) {
+                                                             @Valid @RequestBody CommunityUpdateRequest request) {
         CommunityResponse response = communityService.updateCommunity(id, request);
         return ResponseEntity.ok(response);
     }
@@ -81,5 +82,15 @@ public class CommunityController {
     public ResponseEntity<List<CommunityMemberResponse>> getCommunityMembers(@PathVariable Long communityId) {
         List<CommunityMemberResponse> members = communityMemberService.getCommunityMembers(communityId);
         return ResponseEntity.ok(members);
+    }
+
+    @PutMapping("/{id}/members/{userId}/role")
+    public ResponseEntity<CommunityMemberResponse> updateMemberRole(
+            @PathVariable Long id,
+            @PathVariable Long userId,
+            @Valid @RequestBody RoleUpdateRequest request) {
+        
+        CommunityMemberResponse response = communityMemberService.updateMemberRole(id, userId, request);
+        return ResponseEntity.ok(response);
     }
 }
