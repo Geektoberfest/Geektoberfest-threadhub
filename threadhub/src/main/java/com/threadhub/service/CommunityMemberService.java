@@ -2,6 +2,7 @@ package com.threadhub.service;
 
 import com.threadhub.dto.CommunityMemberResponse;
 import com.threadhub.dto.MembershipStatusResponse;
+import com.threadhub.dto.RoleUpdateRequest;
 import com.threadhub.exception.*;
 import com.threadhub.model.Community;
 import com.threadhub.model.CommunityMember;
@@ -101,5 +102,33 @@ public class CommunityMemberService {
         return communityMemberRepository.findByCommunityId(communityId).stream()
                 .map(CommunityMemberResponse::fromEntity)
                 .collect(Collectors.toList());
+    }
+
+    public CommunityMemberResponse updateMemberRole(Long communityId, Long userId, RoleUpdateRequest request) {
+        Long currentUserId = SecurityUtils.getCurrentUserId()
+                .orElseThrow(() -> new InvalidCredentialsException("Authentication required"));
+
+        Community community = communityRepository.findById(communityId)
+                .orElseThrow(() -> new CommunityNotFoundException("Community not found with id: " + communityId));
+
+        // Check if current user is the community owner
+        if (!community.getOwner().getId().equals(currentUserId)) {
+            throw new RuntimeException("Only the community owner can update member roles"); // Or appropriate 403 exception if available
+        }
+
+        CommunityMember member = communityMemberRepository.findByCommunityIdAndUserId(communityId, userId)
+                .orElseThrow(() -> new NotMemberException("Target user is not a member of this community"));
+
+        // Parse and set the new role (assuming RoleUpdateRequest provides a String or Enum)
+        CommunityMemberRole newRole;
+        try {
+            newRole = CommunityMemberRole.valueOf(request.getRole().toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new RuntimeException("Invalid role specified: " + request.getRole());
+        }
+
+        member.setRole(newRole);
+        CommunityMember updatedMember = communityMemberRepository.save(member);
+        return CommunityMemberResponse.fromEntity(updatedMember);
     }
 }
